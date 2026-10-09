@@ -10,8 +10,13 @@ export default function VehicleStep({ data, brand, model, generation, onPick }) 
   )
   const generations = React.useMemo(() => {
     if (!brand || !model) return []
-    const gens = data?.[brand]?.[model]?.generations || []
-    return [...gens].sort()
+    // NOTE: dropdown entries are objects like {generation: '11th (E170) Generation', ...},
+    // not strings — same extraction the Streamlit app does (g['generation']).
+    const raw = data?.[brand]?.[model]?.generations || []
+    const names = raw
+      .map((g) => (typeof g === 'string' ? g : g?.generation))
+      .filter(Boolean)
+    return [...new Set(names)].sort()
   }, [data, brand, model])
 
   return (
