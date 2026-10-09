@@ -56,15 +56,17 @@ export default function ListingCards({ listings }) {
               <p className="truncate font-display text-[15px] font-semibold tracking-tight">
                 {l.Title}
               </p>
-              <p className="tnum mt-1.5 font-display text-[19px] font-bold text-ink">{l.Price}</p>
-              <a
-                href={l.Listing_URL || '#'}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-2.5 inline-flex items-center gap-1.5 rounded-lg bg-ink px-3.5 py-2 font-display text-[12px] font-bold uppercase tracking-[0.08em] text-paper transition-colors hover:bg-accentdeep"
-              >
-                View listing <span aria-hidden="true">➡️</span>
-              </a>
+              <div className="mt-1.5 flex items-center gap-2.5">
+                <a
+                  href={l.Listing_URL || '#'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex shrink-0 items-center gap-1 rounded-md bg-ink px-2.5 py-1.5 font-display text-[11px] font-bold uppercase tracking-[0.08em] text-paper transition-colors hover:bg-accentdeep"
+                >
+                  View <span aria-hidden="true">➡️</span>
+                </a>
+                <p className="tnum font-display text-[19px] font-bold text-ink">{l.Price}</p>
+              </div>
               <p className="mt-2 text-[12.5px] text-muted">
                 {[l.Year, l.City].filter(Boolean).join(' · ')}
               </p>
