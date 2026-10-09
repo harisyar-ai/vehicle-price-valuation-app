@@ -1,11 +1,19 @@
 """Vercel Python serverless function: GET /api/search -> live PakWheels listings.
 
-Ports fetch_similar_listing_page + parse_listing_card from the Streamlit app's
-"Search Cars" page. Single page only (page=1) with an 8s upstream timeout so the
-function stays comfortably inside Vercel's 10s Hobby limit.
+Ports fetch_similar_listing_page / scrape_search_listings + parse_listing_card +
+rank_similar_listings from the Streamlit app.
+
+Two modes:
+  * default (Search page): strict brand/model/year/city match, single PakWheels
+    page, sorted by generation/city match.
+  * mode=similar (Predict page "Show similar listings"): broader brand/model/trim
+    query across up to 3 PakWheels pages, then Streamlit-faithful ranking —
+    price inside the predicted range + year match first, then closest price to
+    the predicted price, then year/city/generation matches.
 
 Query params:
-  brand (required), model (required), generation, trim, city, year
+  brand (required), model (required), generation, trim, city, year,
+  mode ('similar' for ranked mode), predicted_price, low_price, high_price
 
 Success:  200 {"listings": [{"Title","City","Year","Price","Listing_URL","Cover_URL"}, ...]}
 Failure:  503 {"error": "<friendly message>"} — the UI renders this as a
@@ -15,6 +23,7 @@ import json
 import os
 import re
 import sys
+import time
 
 # Ensure sibling modules resolve both locally and on Vercel.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -22,12 +31,15 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs, quote_plus
 
-# NOTE: requests/bs4 are imported lazily inside do_GET (not at module level).
+# NOTE: requests/bs4 are imported lazily inside fetch (not at module level).
 # If Vercel's build ever ships the function without them, the import error lands
 # in the guarded 503 path below instead of killing the whole invocation (500).
 
-TIMEOUT = 8  # seconds — must stay under Vercel's 10s Hobby function limit
-MAX_RESULTS = 12
+TIMEOUT = 8  # seconds per upstream request — must stay under Vercel's 10s Hobby limit
+FETCH_BUDGET = 7.5  # total seconds allowed for multi-page fetching in similar mode
+SIMILAR_MAX_PAGES = 3
+SIMILAR_MAX_RESULTS = 30
+SEARCH_MAX_RESULTS = 12
 
 HEADERS = {
     "User-Agent": (
@@ -55,6 +67,23 @@ def generation_matches_title(generation, title):
         return False
     primary = str(generation).split("/")[0].strip().lower()
     return bool(primary and primary in str(title).lower())
+
+
+def parse_price_lacs(price_text):
+    """Parse a PakWheels price string ('PKR 58.5 lacs', 'PKR 1.2 crore') to lacs."""
+    text = str(price_text).lower().replace(",", "").strip()
+    m = re.search(r"(\d+(?:\.\d+)?)", text)
+    if not m:
+        return None
+    value = float(m.group(1))
+    if "crore" in text:
+        return value * 100
+    return value  # lacs / lakh, or a bare number treated as lacs
+
+
+def parse_year_num(year_text):
+    m = re.search(r"(\d{4})", str(year_text))
+    return int(m.group(1)) if m else None
 
 
 def parse_listing_card(car, brand, model_name):
@@ -114,13 +143,27 @@ def parse_listing_card(car, brand, model_name):
     }
 
 
-def fetch_search_page(brand, model_name, trim, year, city):
-    """Fetch one PakWheels results page and return filtered listing rows."""
-    # Lazy imports: keeps module import light and lets missing third-party
-    # deps fall into the caller's guarded 503 path instead of a 500.
+def _fetch_page(brand, model_name, query_bits, page_no):
+    """Fetch one PakWheels results page; return raw card rows (unfiltered)."""
     import requests
     from bs4 import BeautifulSoup
 
+    query = quote_plus(" ".join(query_bits))
+    url = f"https://www.pakwheels.com/used-cars/search/-/?q={query}&page={page_no}"
+    response = requests.get(url, headers=HEADERS, timeout=TIMEOUT)
+    response.raise_for_status()
+
+    soup = BeautifulSoup(response.text, "html.parser")
+    return soup.find_all("li", class_=lambda x: x and "classified-listing" in x)
+
+
+def _brand_model_guard(row, brand, model_name):
+    title_lower = row["Title"].lower()
+    return brand.lower() in title_lower and model_name.split()[0].lower() in title_lower
+
+
+def fetch_strict(brand, model_name, trim, year, city):
+    """Search-page mode: one page, strict year/city filters (unchanged behavior)."""
     query_bits = [brand, model_name]
     if trim and trim != "Unspecified":
         query_bits.append(trim)
@@ -128,31 +171,17 @@ def fetch_search_page(brand, model_name, trim, year, city):
         query_bits.append(str(year))
     if city and city != "Other":
         query_bits.append(city)
-    query = quote_plus(" ".join(query_bits))
 
-    url = f"https://www.pakwheels.com/used-cars/search/-/?q={query}&page=1"
-    response = requests.get(url, headers=HEADERS, timeout=TIMEOUT)
-    response.raise_for_status()
-
-    soup = BeautifulSoup(response.text, "html.parser")
-    cards = soup.find_all("li", class_=lambda x: x and "classified-listing" in x)
-
-    rows = []
-    seen = set()
+    cards = _fetch_page(brand, model_name, query_bits, 1)
+    rows, seen = [], set()
     for card in cards:
         row = parse_listing_card(card, brand, model_name)
-        title_lower = row["Title"].lower()
-        # Same brand/model guard as the Streamlit app
-        if brand.lower() not in title_lower:
+        if not _brand_model_guard(row, brand, model_name):
             continue
-        if model_name.split()[0].lower() not in title_lower:
-            continue
-        # Year filter (same as scrape_search_listings)
         if year:
-            m = re.search(r"(\d{4})", str(row["Year"]))
-            if not m or int(m.group(1)) != int(year):
+            y = parse_year_num(row["Year"])
+            if y is None or y != int(year):
                 continue
-        # City filter (same as scrape_search_listings)
         if city and city != "Other" and str(row["City"]).strip().lower() != city.lower():
             continue
         key = row["Listing_URL"] or (row["Title"], row["Price"])
@@ -160,10 +189,73 @@ def fetch_search_page(brand, model_name, trim, year, city):
             continue
         seen.add(key)
         rows.append(row)
-        if len(rows) >= MAX_RESULTS:
+        if len(rows) >= SEARCH_MAX_RESULTS:
             break
-
     return rows
+
+
+def fetch_similar(brand, model_name, trim):
+    """Similar-listings mode: up to SIMILAR_MAX_PAGES pages, brand/model guard only.
+
+    Mirrors the Streamlit app's fetch_similar_listing_page — year/city are left
+    out of the query and applied as ranking signals instead of hard filters,
+    so price-close listings are never excluded before ranking.
+    """
+    query_bits = [brand, model_name]
+    if trim and trim != "Unspecified":
+        query_bits.append(trim)
+
+    rows, seen = [], set()
+    start = time.time()
+    for page_no in range(1, SIMILAR_MAX_PAGES + 1):
+        cards = _fetch_page(brand, model_name, query_bits, page_no)
+        new_rows = 0
+        for card in cards:
+            row = parse_listing_card(card, brand, model_name)
+            if not _brand_model_guard(row, brand, model_name):
+                continue
+            key = row["Listing_URL"] or (row["Title"], row["Price"])
+            if key in seen:
+                continue
+            seen.add(key)
+            rows.append(row)
+            new_rows += 1
+            if len(rows) >= SIMILAR_MAX_RESULTS:
+                break
+        if new_rows == 0:
+            break  # source exhausted — no point fetching further pages
+        if len(rows) >= SIMILAR_MAX_RESULTS:
+            break
+        if time.time() - start > FETCH_BUDGET:
+            break  # stay comfortably inside the serverless time limit
+    return rows
+
+
+def rank_similar_listings(rows, generation, city, user_year, predicted_price, low_price, high_price):
+    """Streamlit-faithful ranking: price-inside-range + year match first, then
+    closest price to the predicted price, then year/city/generation matches."""
+    def sort_key(r):
+        price_lacs = parse_price_lacs(r.get("Price", ""))
+        year_num = parse_year_num(r.get("Year", ""))
+        price_match = (
+            price_lacs is not None and low_price is not None and high_price is not None
+            and low_price <= price_lacs <= high_price
+        )
+        year_match = year_num is not None and user_year is not None and year_num == user_year
+        hybrid = price_match and year_match
+        price_diff = abs(price_lacs - predicted_price) if price_lacs is not None and predicted_price is not None else float("inf")
+        year_diff = abs(year_num - user_year) if year_num is not None and user_year is not None else float("inf")
+        city_match = bool(city and str(r.get("City", "")).strip().lower() == city.lower())
+        gen_match = generation_matches_title(generation, r.get("Title", ""))
+        return (
+            0 if hybrid else 1,
+            price_diff,
+            year_diff,
+            0 if city_match else 1,
+            0 if gen_match else 1,
+        )
+
+    return sorted(rows, key=sort_key)
 
 
 class handler(BaseHTTPRequestHandler):
@@ -193,6 +285,15 @@ class handler(BaseHTTPRequestHandler):
             trim = get("trim")
             city = get("city")
             year = get("year")
+            mode = get("mode")
+            def getf(k):
+                try:
+                    return float(get(k))
+                except (TypeError, ValueError):
+                    return None
+            predicted_price = getf("predicted_price")
+            low_price = getf("low_price")
+            high_price = getf("high_price")
         except Exception:
             self._send(400, {"error": "Could not read the search parameters."})
             return
@@ -202,14 +303,19 @@ class handler(BaseHTTPRequestHandler):
             return
 
         try:
-            rows = fetch_search_page(brand, model_name, trim, year or "", city)
-            # Attach generation for ranking without leaking it into the payload shape
-            for r in rows:
-                r["_generation"] = generation
-            rows.sort(key=lambda r: (
-                0 if generation_matches_title(r.pop("_generation", ""), r["Title"]) else 1,
-                0 if city and str(r["City"]).strip().lower() == city.lower() else 1,
-            ))
+            if mode == "similar":
+                rows = fetch_similar(brand, model_name, trim)
+                user_year = int(year) if year and year.isdigit() else None
+                rows = rank_similar_listings(
+                    rows, generation, city, user_year,
+                    predicted_price, low_price, high_price,
+                )
+            else:
+                rows = fetch_strict(brand, model_name, trim, year, city)
+                rows.sort(key=lambda r: (
+                    0 if generation_matches_title(generation, r["Title"]) else 1,
+                    0 if city and str(r["City"]).strip().lower() == city.lower() else 1,
+                ))
             self._send(200, {"listings": rows})
         except Exception:
             # Graceful degradation: PakWheels blocked us, timed out, or changed

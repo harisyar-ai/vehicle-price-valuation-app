@@ -125,8 +125,14 @@ export default function PredictPage({ data, dataError }) {
         trim: spec.trim,
         city: spec.city,
         year: String(spec.year),
+        mode: 'similar',
+        // Price-first ranking, exactly like the Streamlit app: listings priced
+        // inside the predicted range (and matching year) come first.
+        predicted_price: result ? result.price_lacs : '',
+        low_price: result ? result.low_lacs : '',
+        high_price: result ? result.high_lacs : '',
       })
-      setSimListings((res.listings || []).slice(0, 6))
+      setSimListings(res.listings || [])
       setSimPhase('done')
     } catch (err) {
       setSimError(err.message || 'Could not load similar listings.')
@@ -252,7 +258,7 @@ export default function PredictPage({ data, dataError }) {
           )}
 
           {simPhase === 'done' && simListings.length > 0 && (
-            <ListingCards listings={simListings} />
+            <ListingCards listings={simListings} pageSize={5} />
           )}
         </section>
       )}
