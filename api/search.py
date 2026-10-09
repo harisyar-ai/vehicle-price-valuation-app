@@ -22,8 +22,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs, quote_plus
 
-import requests
-from bs4 import BeautifulSoup
+# NOTE: requests/bs4 are imported lazily inside do_GET (not at module level).
+# If Vercel's build ever ships the function without them, the import error lands
+# in the guarded 503 path below instead of killing the whole invocation (500).
 
 TIMEOUT = 8  # seconds — must stay under Vercel's 10s Hobby function limit
 MAX_RESULTS = 12
@@ -115,6 +116,11 @@ def parse_listing_card(car, brand, model_name):
 
 def fetch_search_page(brand, model_name, trim, year, city):
     """Fetch one PakWheels results page and return filtered listing rows."""
+    # Lazy imports: keeps module import light and lets missing third-party
+    # deps fall into the caller's guarded 503 path instead of a 500.
+    import requests
+    from bs4 import BeautifulSoup
+
     query_bits = [brand, model_name]
     if trim and trim != "Unspecified":
         query_bits.append(trim)
