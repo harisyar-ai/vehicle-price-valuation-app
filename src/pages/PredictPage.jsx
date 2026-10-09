@@ -202,7 +202,7 @@ export default function PredictPage({ data, dataError }) {
             {simPhase === 'idle' && (
               <button
                 onClick={showSimilar}
-                className="rounded-lg bg-ink px-5 py-2.5 font-display text-[13px] font-bold uppercase tracking-[0.1em] text-paper transition-colors hover:bg-accentdeep"
+                className="rounded-xl bg-accent px-8 py-4 font-display text-[15px] font-bold uppercase tracking-[0.12em] text-white shadow-[0_2px_0_#92400E] transition-all hover:bg-accentdeep active:translate-y-[1px] active:shadow-none"
               >
                 Show similar listings
               </button>

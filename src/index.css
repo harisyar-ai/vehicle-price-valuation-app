@@ -84,6 +84,10 @@ input[type='number'] {
 .thin-scroll::-webkit-scrollbar { width: 6px; }
 .thin-scroll::-webkit-scrollbar-thumb { background: #d8d1bd; border-radius: 3px; }
 
+/* Hidden scrollbar for horizontal snap carousels (touch scroll still works) */
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
 ::selection {
   background: #b45309;
   color: #fff;
