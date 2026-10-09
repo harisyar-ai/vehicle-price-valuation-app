@@ -1,7 +1,10 @@
-# Lean runtime for the Vercel Python serverless function (api/predict.py).
+# Lean runtime for the Vercel Python serverless functions (api/predict.py, api/search.py).
 # Pinned to the exact versions the lgbm.pkl pipeline was validated against.
 scikit-learn==1.6.1
 lightgbm==4.6.0
 pandas
 numpy
 joblib
+# Search page only: live PakWheels listings (html.parser — no lxml needed).
+requests
+beautifulsoup4

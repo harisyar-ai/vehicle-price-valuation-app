@@ -1,0 +1,164 @@
+import React from 'react'
+import VehicleStep from '../components/VehicleStep.jsx'
+import SpecStep from '../components/SpecStep.jsx'
+import Readout from '../components/Readout.jsx'
+import { predictPrice } from '../lib/api.js'
+
+const EMPTY_SPEC = {
+  trim: '',
+  engine_cc: '',
+  fuel_type: '',
+  transmission: '',
+  year: '',
+  mileage: '',
+  city: '',
+}
+
+/** Predict page — the valuation flow: Vehicle → Spec → valuation readout. */
+export default function PredictPage({ data, dataError }) {
+  const [brand, setBrand] = React.useState('')
+  const [model, setModel] = React.useState('')
+  const [generation, setGeneration] = React.useState('')
+  const [spec, setSpec] = React.useState(EMPTY_SPEC)
+  const [errors, setErrors] = React.useState({})
+  const [phase, setPhase] = React.useState('idle') // idle | loading | done | error
+  const [result, setResult] = React.useState(null)
+  const [failMsg, setFailMsg] = React.useState('')
+
+  const pickVehicle = (key, value) => {
+    if (key === 'brand') {
+      setBrand(value); setModel(''); setGeneration('')
+    } else if (key === 'model') {
+      setModel(value); setGeneration('')
+    } else {
+      setGeneration(value)
+    }
+    // Dependent spec fields reset whenever the vehicle changes
+    setSpec(EMPTY_SPEC)
+    setErrors({})
+    setPhase('idle'); setResult(null)
+  }
+
+  const pickSpec = (key, value) => {
+    setSpec((s) => ({ ...s, [key]: value }))
+    setErrors((e) => ({ ...e, [key]: undefined }))
+    if (phase === 'done' || phase === 'error') { setPhase('idle'); setResult(null) }
+  }
+
+  const validate = () => {
+    const e = {}
+    if (!brand) e.brand = 'Choose a make'
+    if (!model) e.model = 'Choose a model'
+    if (!spec.trim) e.trim = 'Required'
+    if (!spec.engine_cc) e.engine_cc = 'Required'
+    if (!spec.fuel_type) e.fuel_type = 'Required'
+    if (!spec.transmission) e.transmission = 'Required'
+    if (!spec.year) e.year = 'Required'
+    if (spec.mileage === '' || spec.mileage === null) e.mileage = 'Required'
+    else {
+      const m = Number(spec.mileage)
+      if (!Number.isFinite(m) || m < 0 || m > 1000000) e.mileage = '0 – 1,000,000 km'
+    }
+    if (!spec.city) e.city = 'Required'
+    setErrors(e)
+    return Object.keys(e).length === 0
+  }
+
+  const runValuation = async () => {
+    if (!validate()) return
+    setPhase('loading'); setFailMsg(''); setResult(null)
+    try {
+      const res = await predictPrice({
+        brand,
+        model,
+        generation: generation || 'Unspecified',
+        trim: spec.trim,
+        engine_cc: Number(spec.engine_cc),
+        fuel_type: spec.fuel_type,
+        transmission: spec.transmission,
+        year: Number(spec.year),
+        mileage: Number(spec.mileage),
+        city: spec.city,
+      })
+      setResult(res)
+      setPhase('done')
+    } catch (err) {
+      setFailMsg(err.message || 'Valuation failed.')
+      setPhase('error')
+    }
+  }
+
+  if (dataError) {
+    return (
+      <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-[14px] text-red-800">
+        {dataError}
+      </div>
+    )
+  }
+  if (!data) {
+    return (
+      <div className="space-y-4">
+        <div className="skeleton h-40" />
+        <div className="skeleton h-64" />
+      </div>
+    )
+  }
+
+  return (
+    <>
+      <div className="mb-6 max-w-2xl">
+        <h1 className="font-display text-[26px] font-bold leading-tight tracking-tight sm:text-[32px]">
+          What is it actually worth?
+        </h1>
+        <p className="mt-2 text-[14px] leading-relaxed text-muted">
+          Pick the car, spec it honestly, and get a data-driven market estimate —
+          trained on thousands of real PakWheels listings, not guesswork.
+        </p>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
+        <div className="space-y-6">
+          <VehicleStep
+            data={data}
+            brand={brand}
+            model={model}
+            generation={generation}
+            onPick={pickVehicle}
+          />
+          <SpecStep
+            data={data}
+            brand={brand}
+            model={model}
+            generation={generation}
+            spec={spec}
+            onPick={pickSpec}
+            errors={errors}
+          />
+          <button
+            onClick={runValuation}
+            disabled={phase === 'loading' || !brand || !model}
+            className="w-full rounded-xl bg-accent px-6 py-4 font-display text-[16px] font-bold uppercase tracking-[0.12em] text-white shadow-[0_2px_0_#92400E] transition-all hover:bg-accentdeep active:translate-y-[1px] active:shadow-none disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
+          >
+            {phase === 'loading' ? 'Running valuation…' : 'Run valuation'}
+          </button>
+          {(errors.brand || errors.model) && (
+            <p className="text-[13px] font-medium text-red-700">
+              {errors.brand || errors.model}
+            </p>
+          )}
+        </div>
+
+        <Readout
+          phase={phase}
+          result={result}
+          error={failMsg}
+          spec={spec}
+          brand={brand}
+          model={model}
+          generation={generation}
+          onRetry={runValuation}
+        />
+      </div>
+    </>
+  )
+}
