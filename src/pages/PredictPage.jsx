@@ -31,6 +31,10 @@ export default function PredictPage({ data, dataError }) {
   const [simListings, setSimListings] = React.useState([])
   const [simError, setSimError] = React.useState('')
 
+  // Tracks whether the user typed their own mileage. Until they do, picking a
+  // year auto-fills the Streamlit-style estimate: car_age × 12,000 km.
+  const mileageTouched = React.useRef(false)
+
   const resetSimilar = () => {
     setSimPhase('idle'); setSimListings([]); setSimError('')
   }
@@ -47,11 +51,22 @@ export default function PredictPage({ data, dataError }) {
     setSpec(EMPTY_SPEC)
     setErrors({})
     setPhase('idle'); setResult(null)
+    mileageTouched.current = false
     resetSimilar()
   }
 
   const pickSpec = (key, value) => {
-    setSpec((s) => ({ ...s, [key]: value }))
+    if (key === 'mileage') mileageTouched.current = true
+    setSpec((s) => {
+      const next = { ...s, [key]: value }
+      // Auto-estimate mileage from the year until the user types their own
+      // (mirrors the Streamlit app: max(1, 2026 - year) * 12000 km).
+      if (key === 'year' && value && !mileageTouched.current) {
+        const age = Math.max(1, 2026 - Number(value))
+        if (Number.isFinite(age)) next.mileage = String(age * 12000)
+      }
+      return next
+    })
     setErrors((e) => ({ ...e, [key]: undefined }))
     if (phase === 'done' || phase === 'error') { setPhase('idle'); setResult(null); resetSimilar() }
   }

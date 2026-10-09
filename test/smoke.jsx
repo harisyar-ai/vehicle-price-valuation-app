@@ -12,6 +12,8 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import data from '../public/dropdown_data.json'
 import VehicleStep from '../src/components/VehicleStep.jsx'
 import SpecStep, { scopedOptions } from '../src/components/SpecStep.jsx'
+import { Combobox } from '../src/components/Combobox.jsx'
+import { orderedBrands } from '../src/lib/brands.js'
 
 let failures = 0
 function check(name, cond, detail = '') {
@@ -23,21 +25,34 @@ function check(name, cond, detail = '') {
   }
 }
 
-/** Pull [value, text] pairs out of rendered <option> tags. */
-function optionPairs(html) {
+/** Pull option labels out of a rendered open Combobox (role="option" buttons). */
+function comboOptions(html) {
   const out = []
-  const re = /<option value="([^"]*)">([^<]*)<\/option>/g
+  const re = /role="option"[^>]*>([\s\S]*?)<\/button>/g
   let m
-  while ((m = re.exec(html))) out.push([m[1], m[2]])
+  while ((m = re.exec(html))) {
+    // strip inner markup (e.g. the ✓ marker) and trim
+    const text = m[1].replace(/<[^>]+>/g, '').replace(/✓/g, '').trim()
+    out.push(text)
+  }
   return out
 }
 
-function assertOptionsClean(name, html) {
-  const pairs = optionPairs(html)
-  const bad = pairs.filter(([v, t]) => v === '[object Object]' || t === '[object Object]')
-  check(`${name}: ${pairs.length} options, all primitives`, pairs.length > 0 && bad.length === 0,
-    bad.length ? `${bad.length} [object Object] options` : `${pairs.length} options found`)
-  return pairs
+function assertComboClean(name, options) {
+  const html = renderToStaticMarkup(
+    <Combobox value="" onChange={noop} options={options} defaultOpen={true} />
+  )
+  const labels = comboOptions(html)
+  const bad = labels.filter((t) => t === '[object Object]' || t === '')
+  check(`${name}: ${labels.length} options, all primitives`, labels.length > 0 && bad.length === 0,
+    bad.length ? `${bad.length} bad options` : `${labels.length} options found`)
+  return labels
+}
+
+/** Generation names exactly as VehicleStep derives them. */
+function generationNames(brand, model) {
+  const raw = data?.[brand]?.[model]?.generations || []
+  return [...new Set(raw.map((g) => (typeof g === 'string' ? g : g?.generation)).filter(Boolean))].sort()
 }
 
 const noop = () => {}
@@ -53,9 +68,16 @@ try {
 } catch (e) {
   check('renders without throwing', false, String(e && e.message))
 }
-const pairs1 = assertOptionsClean('Toyota/Corolla selects', html)
+const genLabels = assertComboClean('Toyota/Corolla generations', generationNames('Toyota', 'Corolla'))
 check('contains "11th (E170) Generation" option',
-  pairs1.some(([, t]) => t === '11th (E170) Generation'))
+  genLabels.some((t) => t === '11th (E170) Generation'))
+
+console.log('case 1b: brand order is volume-based (Suzuki/Toyota/Honda on top)')
+const brandOrder = orderedBrands(data)
+check('top 3 are Suzuki/Toyota/Honda',
+  brandOrder[0] === 'Suzuki' && brandOrder[1] === 'Toyota' && brandOrder[2] === 'Honda',
+  `got ${brandOrder.slice(0, 3).join(', ')}`)
+check('all 77 brands present', brandOrder.length === 77, `got ${brandOrder.length}`)
 
 console.log('case 2: VehicleStep Honda → City')
 try {
@@ -66,7 +88,7 @@ try {
 } catch (e) {
   check('renders without throwing', false, String(e && e.message))
 }
-assertOptionsClean('Honda/City selects', html)
+assertComboClean('Honda/City generations', generationNames('Honda', 'City'))
 
 console.log('case 3: SpecStep Toyota → Corolla → 11th (E170) Generation')
 try {
@@ -78,12 +100,12 @@ try {
 } catch (e) {
   check('renders without throwing', false, String(e && e.message))
 }
-assertOptionsClean('Toyota/Corolla/11th selects', html)
 const scoped = scopedOptions(data, 'Toyota', 'Corolla', '11th (E170) Generation')
 check('scoped trims resolve to non-empty primitives',
   Array.isArray(scoped?.trims) && scoped.trims.length > 0 &&
   scoped.trims.every((t) => typeof t === 'string' || typeof t === 'number'),
   `trims=${JSON.stringify((scoped?.trims || []).slice(0, 3))}`)
+assertComboClean('Toyota/Corolla/11th scoped trims', scoped?.trims || [])
 
 console.log('case 4: SpecStep Honda → City (no generation)')
 try {
@@ -95,7 +117,8 @@ try {
 } catch (e) {
   check('renders without throwing', false, String(e && e.message))
 }
-assertOptionsClean('Honda/City spec selects', html)
+const scopedCity = scopedOptions(data, 'Honda', 'City', '')
+assertComboClean('Honda/City scoped trims', scopedCity?.trims || [])
 
 console.log('case 5: full catalogue walk — no non-primitive dropdown entries')
 let objCount = 0

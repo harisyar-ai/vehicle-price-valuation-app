@@ -1,6 +1,8 @@
 import React from 'react'
-import { Field, Select } from '../components/fields.jsx'
+import { Field } from '../components/fields.jsx'
+import { Combobox } from '../components/Combobox.jsx'
 import ListingCards from '../components/ListingCards.jsx'
+import { orderedBrands } from '../lib/brands.js'
 import { scopedOptions, CITIES } from '../components/SpecStep.jsx'
 import { searchListings } from '../lib/api.js'
 
@@ -19,7 +21,7 @@ export default function SearchPage({ data, dataError }) {
   const [listings, setListings] = React.useState([])
   const [failMsg, setFailMsg] = React.useState('')
 
-  const brands = React.useMemo(() => Object.keys(data || {}).sort(), [data])
+  const brands = React.useMemo(() => orderedBrands(data), [data])
   const models = React.useMemo(
     () => (brand && data?.[brand] ? Object.keys(data[brand]).sort() : []),
     [data, brand]
@@ -101,22 +103,22 @@ export default function SearchPage({ data, dataError }) {
       <section className="rounded-xl border border-line bg-white p-5 sm:p-6">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Field label="Brand">
-            <Select value={brand} onChange={pickBrand} options={brands} placeholder="Choose brand" />
+            <Combobox value={brand} onChange={pickBrand} options={brands} placeholder="Type or choose brand" />
           </Field>
           <Field label="Model">
-            <Select value={model} onChange={pickModel} options={models} disabled={!brand} placeholder={brand ? 'Choose model' : 'Pick a brand first'} />
+            <Combobox value={model} onChange={pickModel} options={models} disabled={!brand} placeholder={brand ? 'Type or choose model' : 'Pick a brand first'} />
           </Field>
           <Field label="Generation">
-            <Select value={generation} onChange={(v) => { setGeneration(v); setTrim(''); setYear('') }} options={generations} disabled={!model} placeholder={model ? 'Choose generation' : 'Pick a model first'} />
+            <Combobox value={generation} onChange={(v) => { setGeneration(v); setTrim(''); setYear('') }} options={generations} disabled={!model} placeholder={model ? 'Type or choose generation' : 'Pick a model first'} />
           </Field>
           <Field label="Variant">
-            <Select value={trim} onChange={setTrim} options={trims} disabled={!model} placeholder="Choose variant" />
+            <Combobox value={trim} onChange={setTrim} options={trims} disabled={!model} placeholder="Type or choose variant" />
           </Field>
           <Field label="Year">
-            <Select value={year} onChange={setYear} options={years} disabled={!model} placeholder="Choose year" />
+            <Combobox value={year} onChange={setYear} options={years} disabled={!model} placeholder="Type or choose year" />
           </Field>
           <Field label="City">
-            <Select value={city} onChange={setCity} options={CITIES} placeholder="Choose city" />
+            <Combobox value={city} onChange={setCity} options={CITIES} placeholder="Type or choose city" />
           </Field>
         </div>
         <button

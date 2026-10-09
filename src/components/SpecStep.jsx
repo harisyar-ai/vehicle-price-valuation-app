@@ -1,5 +1,6 @@
 import React from 'react'
-import { Field, Select, NumberInput } from './fields.jsx'
+import { Field, NumberInput } from './fields.jsx'
+import { Combobox } from './Combobox.jsx'
 
 export const STANDARD_ENGINES = [660, 800, 1000, 1200, 1300, 1500, 1600, 1800, 2000, 2400, 2500, 2700, 2800, 3000, 4000]
 export const DEFAULT_FUELS = ['Petrol', 'Hybrid', 'Diesel', 'Electric', 'REEV', 'CNG']
@@ -66,25 +67,25 @@ export default function SpecStep({ data, brand, model, generation, spec, onPick,
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Field label="Trim / Variant" error={errors.trim}>
-          <Select value={spec.trim} onChange={(v) => onPick('trim', v)} options={trims} disabled={!ready} placeholder="Choose trim" />
+          <Combobox value={spec.trim} onChange={(v) => onPick('trim', v)} options={trims} disabled={!ready} placeholder="Type or choose trim" />
         </Field>
         <Field label="Engine" error={errors.engine_cc} hint="cc">
-          <Select value={spec.engine_cc} onChange={(v) => onPick('engine_cc', v)} options={engines} disabled={!ready} placeholder="Choose engine" />
+          <Combobox value={spec.engine_cc} onChange={(v) => onPick('engine_cc', v)} options={engines} disabled={!ready} placeholder="Type or choose engine" />
         </Field>
         <Field label="Fuel type" error={errors.fuel_type}>
-          <Select value={spec.fuel_type} onChange={(v) => onPick('fuel_type', v)} options={fuels} disabled={!ready} placeholder="Choose fuel" />
+          <Combobox value={spec.fuel_type} onChange={(v) => onPick('fuel_type', v)} options={fuels} disabled={!ready} placeholder="Type or choose fuel" />
         </Field>
         <Field label="Transmission" error={errors.transmission}>
-          <Select value={spec.transmission} onChange={(v) => onPick('transmission', v)} options={transmissions} disabled={!ready} placeholder="Choose gearbox" />
+          <Combobox value={spec.transmission} onChange={(v) => onPick('transmission', v)} options={transmissions} disabled={!ready} placeholder="Type or choose gearbox" />
         </Field>
         <Field label="Model year" error={errors.year}>
-          <Select value={spec.year} onChange={(v) => onPick('year', v)} options={years} disabled={!ready} placeholder="Choose year" />
+          <Combobox value={spec.year} onChange={(v) => onPick('year', v)} options={years} disabled={!ready} placeholder="Type or choose year" />
         </Field>
-        <Field label="Mileage" error={errors.mileage} hint="0 – 1,000,000">
+        <Field label="Mileage" error={errors.mileage} hint="auto-estimated from year">
           <NumberInput value={spec.mileage} onChange={(v) => onPick('mileage', v)} min={0} max={1000000} step={1000} placeholder="e.g. 80000" suffix="km" />
         </Field>
         <Field label="Registration city" error={errors.city} hint="drives city tier">
-          <Select value={spec.city} onChange={(v) => onPick('city', v)} options={CITIES} disabled={!ready} placeholder="Choose city" />
+          <Combobox value={spec.city} onChange={(v) => onPick('city', v)} options={CITIES} disabled={!ready} placeholder="Type or choose city" />
         </Field>
       </div>
     </section>

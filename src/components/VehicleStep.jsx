@@ -1,9 +1,11 @@
 import React from 'react'
-import { Field, Select } from './fields.jsx'
+import { Field } from './fields.jsx'
+import { Combobox } from './Combobox.jsx'
+import { orderedBrands } from '../lib/brands.js'
 
-/** Step 01 — cascading Make → Model → Generation selects. */
+/** Step 01 — cascading Make → Model → Generation selects (searchable, volume-ordered). */
 export default function VehicleStep({ data, brand, model, generation, onPick }) {
-  const brands = React.useMemo(() => Object.keys(data || {}).sort(), [data])
+  const brands = React.useMemo(() => orderedBrands(data), [data])
   const models = React.useMemo(
     () => (brand && data?.[brand] ? Object.keys(data[brand]).sort() : []),
     [data, brand]
@@ -31,29 +33,29 @@ export default function VehicleStep({ data, brand, model, generation, onPick }) 
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Field label="Make">
-          <Select
+          <Combobox
             value={brand}
             onChange={(v) => onPick('brand', v)}
             options={brands}
-            placeholder="Choose make"
+            placeholder="Type or choose make"
           />
         </Field>
         <Field label="Model">
-          <Select
+          <Combobox
             value={model}
             onChange={(v) => onPick('model', v)}
             options={models}
             disabled={!brand}
-            placeholder={brand ? 'Choose model' : 'Pick a make first'}
+            placeholder={brand ? 'Type or choose model' : 'Pick a make first'}
           />
         </Field>
         <Field label="Generation" hint={generations.length ? `${generations.length} found` : ''}>
-          <Select
+          <Combobox
             value={generation}
             onChange={(v) => onPick('generation', v)}
             options={generations}
             disabled={!model}
-            placeholder={model ? (generations.length ? 'Choose generation' : 'Unspecified') : 'Pick a model first'}
+            placeholder={model ? (generations.length ? 'Type or choose generation' : 'Unspecified') : 'Pick a model first'}
           />
         </Field>
       </div>

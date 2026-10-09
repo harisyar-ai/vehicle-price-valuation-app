@@ -23,36 +23,10 @@ export default function ListingCards({ listings }) {
 
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <p className="text-[12.5px] text-muted">
-          <span className="tnum font-semibold text-ink">{listings.length}</span> live{' '}
-          {listings.length === 1 ? 'listing' : 'listings'} on PakWheels
-        </p>
-        {showNav && (
-          <div className="flex shrink-0 gap-2">
-            <button
-              type="button"
-              onClick={() => scrollByCards(-1)}
-              aria-label="Previous listings"
-              className={navBtn}
-            >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                <path d="M10 3 5 8l5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
-            <button
-              type="button"
-              onClick={() => scrollByCards(1)}
-              aria-label="Next listings"
-              className={navBtn}
-            >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                <path d="M6 3l5 5-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
-          </div>
-        )}
-      </div>
+      <p className="mb-4 text-[12.5px] text-muted">
+        <span className="tnum font-semibold text-ink">{listings.length}</span> live{' '}
+        {listings.length === 1 ? 'listing' : 'listings'} on PakWheels
+      </p>
 
       <div
         ref={trackRef}
@@ -91,6 +65,31 @@ export default function ListingCards({ listings }) {
           </a>
         ))}
       </div>
+
+      {showNav && (
+        <div className="mt-4 flex items-center justify-center gap-3">
+          <button
+            type="button"
+            onClick={() => scrollByCards(-1)}
+            aria-label="Previous listings"
+            className={navBtn}
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M10 3 5 8l5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            onClick={() => scrollByCards(1)}
+            aria-label="Next listings"
+            className={navBtn}
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M6 3l5 5-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+        </div>
+      )}
     </div>
   )
 }
