@@ -5,9 +5,17 @@ pakistani-car-price-predictor Streamlit app (app.py). The pickled pipeline
 references __main__.FeaturePrep / __main__.TargetMeanEncoder, so the classes
 are injected into __main__ before joblib.load (same as the original app).
 """
+import ctypes
 import json
 import os
 import re
+
+# LightGBM's native lib needs libgomp (OpenMP), which Vercel's Python runtime
+# does not ship. We bundle a manylinux-compatible libgomp.so.1 with the
+# function and preload it before anything imports lightgbm.
+_gomp = os.path.join(os.path.dirname(os.path.abspath(__file__)), "libgomp.so.1")
+if os.path.exists(_gomp):
+    ctypes.CDLL(_gomp, mode=ctypes.RTLD_GLOBAL)
 
 import joblib
 import numpy as np
