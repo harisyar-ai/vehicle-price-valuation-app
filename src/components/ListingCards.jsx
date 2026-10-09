@@ -56,7 +56,8 @@ export default function ListingCards({ listings }) {
               <p className="truncate font-display text-[15px] font-semibold tracking-tight">
                 {l.Title}
               </p>
-              <div className="mt-1.5 flex items-center gap-2.5">
+              <div className="mt-1.5 flex items-center justify-between gap-2.5">
+                <p className="tnum font-display text-[19px] font-bold text-ink">{l.Price}</p>
                 <a
                   href={l.Listing_URL || '#'}
                   target="_blank"
@@ -65,7 +66,6 @@ export default function ListingCards({ listings }) {
                 >
                   View <span aria-hidden="true">➡️</span>
                 </a>
-                <p className="tnum font-display text-[19px] font-bold text-ink">{l.Price}</p>
               </div>
               <p className="mt-2 text-[12.5px] text-muted">
                 {[l.Year, l.City].filter(Boolean).join(' · ')}
