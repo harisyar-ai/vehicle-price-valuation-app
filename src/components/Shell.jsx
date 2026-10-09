@@ -164,12 +164,18 @@ export default function Shell({ page, onNav, children }) {
         <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">{children}</main>
 
         <footer className="border-t border-line">
-          <div className="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-5 text-[12px] text-muted sm:flex-row sm:items-center sm:justify-between sm:px-6">
+          <div className="mx-auto max-w-6xl px-4 py-5 text-center text-[12px] text-muted sm:px-6">
             <p>
-              MotorVal · model by Muhammad Haris Afridi ·{' '}
-              <span className="tnum">77 makes indexed</span>
+              Developed by{' '}
+              <a
+                href="https://harisyar-ai.github.io/harisyar-ai/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-semibold text-ink underline decoration-accent decoration-2 underline-offset-2 hover:text-accent"
+              >
+                Muhammad Haris Afridi
+              </a>
             </p>
-            <p>Prices track the used market — re-check before you buy or sell.</p>
           </div>
         </footer>
       </div>

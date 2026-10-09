@@ -2,7 +2,8 @@ import React from 'react'
 import VehicleStep from '../components/VehicleStep.jsx'
 import SpecStep from '../components/SpecStep.jsx'
 import Readout from '../components/Readout.jsx'
-import { predictPrice } from '../lib/api.js'
+import ListingCards from '../components/ListingCards.jsx'
+import { predictPrice, searchListings } from '../lib/api.js'
 
 const EMPTY_SPEC = {
   trim: '',
@@ -24,6 +25,15 @@ export default function PredictPage({ data, dataError }) {
   const [phase, setPhase] = React.useState('idle') // idle | loading | done | error
   const [result, setResult] = React.useState(null)
   const [failMsg, setFailMsg] = React.useState('')
+  // Similar PakWheels listings for the valued car (mirrors Streamlit's
+  // "SHOW SIMILAR LISTINGS" step after prediction).
+  const [simPhase, setSimPhase] = React.useState('idle') // idle | loading | done | error
+  const [simListings, setSimListings] = React.useState([])
+  const [simError, setSimError] = React.useState('')
+
+  const resetSimilar = () => {
+    setSimPhase('idle'); setSimListings([]); setSimError('')
+  }
 
   const pickVehicle = (key, value) => {
     if (key === 'brand') {
@@ -37,12 +47,13 @@ export default function PredictPage({ data, dataError }) {
     setSpec(EMPTY_SPEC)
     setErrors({})
     setPhase('idle'); setResult(null)
+    resetSimilar()
   }
 
   const pickSpec = (key, value) => {
     setSpec((s) => ({ ...s, [key]: value }))
     setErrors((e) => ({ ...e, [key]: undefined }))
-    if (phase === 'done' || phase === 'error') { setPhase('idle'); setResult(null) }
+    if (phase === 'done' || phase === 'error') { setPhase('idle'); setResult(null); resetSimilar() }
   }
 
   const validate = () => {
@@ -67,6 +78,7 @@ export default function PredictPage({ data, dataError }) {
   const runValuation = async () => {
     if (!validate()) return
     setPhase('loading'); setFailMsg(''); setResult(null)
+    resetSimilar()
     try {
       const res = await predictPrice({
         brand,
@@ -85,6 +97,25 @@ export default function PredictPage({ data, dataError }) {
     } catch (err) {
       setFailMsg(err.message || 'Valuation failed.')
       setPhase('error')
+    }
+  }
+
+  const showSimilar = async () => {
+    setSimPhase('loading'); setSimError(''); setSimListings([])
+    try {
+      const res = await searchListings({
+        brand,
+        model,
+        generation: generation || 'Unspecified',
+        trim: spec.trim,
+        city: spec.city,
+        year: String(spec.year),
+      })
+      setSimListings((res.listings || []).slice(0, 6))
+      setSimPhase('done')
+    } catch (err) {
+      setSimError(err.message || 'Could not load similar listings.')
+      setSimPhase('error')
     }
   }
 
@@ -139,7 +170,7 @@ export default function PredictPage({ data, dataError }) {
             disabled={phase === 'loading' || !brand || !model}
             className="w-full rounded-xl bg-accent px-6 py-4 font-display text-[16px] font-bold uppercase tracking-[0.12em] text-white shadow-[0_2px_0_#92400E] transition-all hover:bg-accentdeep active:translate-y-[1px] active:shadow-none disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
           >
-            {phase === 'loading' ? 'Running valuation…' : 'Run valuation'}
+            {phase === 'loading' ? 'Predicting…' : 'Predict Price'}
           </button>
           {(errors.brand || errors.model) && (
             <p className="text-[13px] font-medium text-red-700">
@@ -159,6 +190,57 @@ export default function PredictPage({ data, dataError }) {
           onRetry={runValuation}
         />
       </div>
+
+      {/* Similar PakWheels listings for the valued car — mirrors the
+          Streamlit "SHOW SIMILAR LISTINGS" step after prediction. */}
+      {phase === 'done' && result && (
+        <section className="mt-8">
+          <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="font-display text-[19px] font-bold tracking-tight">
+              Similar cars for sale
+            </h2>
+            {simPhase === 'idle' && (
+              <button
+                onClick={showSimilar}
+                className="rounded-lg bg-ink px-5 py-2.5 font-display text-[13px] font-bold uppercase tracking-[0.1em] text-paper transition-colors hover:bg-accentdeep"
+              >
+                Show similar listings
+              </button>
+            )}
+          </div>
+
+          {simPhase === 'loading' && (
+            <div className="space-y-4">
+              <div className="skeleton h-28" />
+              <div className="skeleton h-28" />
+            </div>
+          )}
+
+          {simPhase === 'error' && (
+            <div className="rounded-xl border border-line bg-white p-6 text-center">
+              <p className="text-[13.5px] text-muted">{simError}</p>
+              <button
+                onClick={showSimilar}
+                className="mt-3 rounded-lg border border-line bg-paper px-5 py-2.5 text-[13px] font-semibold text-ink transition-colors hover:border-muted"
+              >
+                Try again
+              </button>
+            </div>
+          )}
+
+          {simPhase === 'done' && simListings.length === 0 && (
+            <div className="rounded-xl border border-line bg-white p-6 text-center">
+              <p className="text-[13.5px] text-muted">
+                No similar listings on PakWheels right now for this exact spec.
+              </p>
+            </div>
+          )}
+
+          {simPhase === 'done' && simListings.length > 0 && (
+            <ListingCards listings={simListings} />
+          )}
+        </section>
+      )}
     </>
   )
 }

@@ -140,10 +140,6 @@ export default function Readout({ phase, result, error, spec, brand, model, gene
         </div>
       </div>
 
-      <p className="mt-3 px-1 text-[11.5px] leading-relaxed text-muted">
-        Model: LightGBM, RMSE 5.84 lacs · MAE 2.87 lacs on holdout. Estimates, not offers —
-        condition, accidents and maintenance history move real prices.
-      </p>
     </aside>
   )
 }
