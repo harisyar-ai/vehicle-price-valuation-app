@@ -1,0 +1,7 @@
+# Lean runtime for the Vercel Python serverless function (api/predict.py).
+# Pinned to the exact versions the lgbm.pkl pipeline was validated against.
+scikit-learn==1.6.1
+lightgbm==4.6.0
+pandas
+numpy
+joblib
