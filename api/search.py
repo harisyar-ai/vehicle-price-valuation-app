@@ -173,7 +173,7 @@ class handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json")
         for k, v in _CORS.items():
             self.send_header(k, v)
-        self.send_header("Content-Length", str(body))
+        self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
 
