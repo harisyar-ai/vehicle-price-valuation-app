@@ -33,36 +33,43 @@ export default function ListingCards({ listings }) {
         className="no-scrollbar -mx-1 flex snap-x snap-mandatory gap-5 overflow-x-auto px-1 pb-3"
       >
         {listings.map((l, i) => (
-          <a
+          <div
             key={l.Listing_URL || i}
             data-card
-            href={l.Listing_URL || '#'}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="group w-[270px] shrink-0 snap-start overflow-hidden rounded-xl border border-line bg-white transition-colors hover:border-muted sm:w-[310px]"
+            className="w-[270px] shrink-0 snap-start overflow-hidden rounded-xl border border-line bg-white transition-colors hover:border-muted sm:w-[310px]"
           >
             {l.Cover_URL ? (
-              <img
-                src={l.Cover_URL}
-                alt=""
-                loading="lazy"
-                className="h-44 w-full border-b border-line object-cover"
-              />
+              <a href={l.Listing_URL || '#'} target="_blank" rel="noopener noreferrer" aria-label={l.Title}>
+                <img
+                  src={l.Cover_URL}
+                  alt=""
+                  loading="lazy"
+                  className="h-44 w-full border-b border-line object-cover"
+                />
+              </a>
             ) : (
               <div className="flex h-44 w-full items-center justify-center border-b border-line bg-paperdark font-display text-[15px] font-bold text-muted">
                 {l.brand?.[0] || 'M'}
               </div>
             )}
             <div className="p-4">
-              <p className="truncate font-display text-[15px] font-semibold tracking-tight group-hover:text-accent">
+              <p className="truncate font-display text-[15px] font-semibold tracking-tight">
                 {l.Title}
               </p>
               <p className="tnum mt-1.5 font-display text-[19px] font-bold text-ink">{l.Price}</p>
-              <p className="mt-1 text-[12.5px] text-muted">
+              <a
+                href={l.Listing_URL || '#'}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-2.5 inline-flex items-center gap-1.5 rounded-lg bg-ink px-3.5 py-2 font-display text-[12px] font-bold uppercase tracking-[0.08em] text-paper transition-colors hover:bg-accentdeep"
+              >
+                View listing <span aria-hidden="true">➡️</span>
+              </a>
+              <p className="mt-2 text-[12.5px] text-muted">
                 {[l.Year, l.City].filter(Boolean).join(' · ')}
               </p>
             </div>
-          </a>
+          </div>
         ))}
       </div>
 
