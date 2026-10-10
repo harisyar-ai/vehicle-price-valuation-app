@@ -258,7 +258,7 @@ export default function PredictPage({ data, dataError }) {
           )}
 
           {simPhase === 'done' && simListings.length > 0 && (
-            <ListingCards listings={simListings} pageSize={5} />
+            <ListingCards listings={simListings} pageSize={6} />
           )}
         </section>
       )}
