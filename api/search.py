@@ -212,13 +212,16 @@ def _fetch_page(session, brand, model_name, query_bits, page_no, debug=None):
     url = f"https://www.pakwheels.com/used-cars/search/-/?q={query}&page={page_no}"
     response = session.get(url, timeout=TIMEOUT)
     if debug is not None:
+        _soup = BeautifulSoup(response.text, "html.parser")
+        _text = _soup.get_text(" ", strip=True)[:300]
         debug.append({
             "url": url,
             "status": response.status_code,
             "final_url": response.url,
             "bytes": len(response.text),
             "redirects": len(response.history),
-            "title": BeautifulSoup(response.text, "html.parser").title.string.strip()[:80] if BeautifulSoup(response.text, "html.parser").title and BeautifulSoup(response.text, "html.parser").title.string else "",
+            "title": _soup.title.string.strip()[:80] if _soup.title and _soup.title.string else "",
+            "body_snippet": _text,
         })
     response.raise_for_status()
 
@@ -314,7 +317,9 @@ def fetch_similar(brand, model_name, trim, debug=None):
             break
         if time.time() - start > FETCH_BUDGET:
             break  # stay comfortably inside the serverless time limit
-    _cache_set(cache_key, rows)
+    # Never cache empty results — a block page must not poison the cache
+    if rows:
+        _cache_set(cache_key, rows)
     return rows
 
 
