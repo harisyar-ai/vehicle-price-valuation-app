@@ -62,7 +62,10 @@ def make_headers():
         "User-Agent": random.choice(USER_AGENTS),
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.9",
-        "Accept-Encoding": "gzip, deflate, br",
+        # NOTE: no "br" (brotli) here on purpose — some serverless Python
+        # runtimes lack a brotli decoder, which would leave response.text as
+        # undecodable garbage. gzip/deflate are always safe.
+        "Accept-Encoding": "gzip, deflate",
         "DNT": "1",
         "Upgrade-Insecure-Requests": "1",
         "Sec-Fetch-Dest": "document",
