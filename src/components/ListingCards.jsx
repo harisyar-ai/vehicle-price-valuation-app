@@ -4,22 +4,30 @@ const cardCls =
   'overflow-hidden rounded-xl border border-line bg-white transition-colors hover:border-muted'
 
 function ListingCard({ l }) {
+  // If the cover image fails to load (blocked network, dead URL…), fall back
+  // to the brand-initial tile instead of showing a broken-image icon.
+  const [imgOk, setImgOk] = React.useState(true)
+  React.useEffect(() => setImgOk(true), [l.Cover_URL])
+
+  const cover = l.Cover_URL && imgOk ? (
+    <a href={l.Listing_URL || '#'} target="_blank" rel="noopener noreferrer" aria-label={l.Title}>
+      <img
+        src={l.Cover_URL}
+        alt=""
+        loading="lazy"
+        onError={() => setImgOk(false)}
+        className="h-44 w-full border-b border-line object-cover"
+      />
+    </a>
+  ) : (
+    <div className="flex h-44 w-full items-center justify-center border-b border-line bg-paperdark font-display text-[15px] font-bold text-muted">
+      {l.brand?.[0] || 'M'}
+    </div>
+  )
+
   return (
     <div data-card className={cardCls}>
-      {l.Cover_URL ? (
-        <a href={l.Listing_URL || '#'} target="_blank" rel="noopener noreferrer" aria-label={l.Title}>
-          <img
-            src={l.Cover_URL}
-            alt=""
-            loading="lazy"
-            className="h-44 w-full border-b border-line object-cover"
-          />
-        </a>
-      ) : (
-        <div className="flex h-44 w-full items-center justify-center border-b border-line bg-paperdark font-display text-[15px] font-bold text-muted">
-          {l.brand?.[0] || 'M'}
-        </div>
-      )}
+      {cover}
       <div className="p-4">
         <p className="truncate font-display text-[15px] font-semibold tracking-tight">
           {l.Title}
