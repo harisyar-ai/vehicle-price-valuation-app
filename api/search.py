@@ -40,15 +40,60 @@ FETCH_BUDGET = 7.5  # total seconds allowed for multi-page fetching in similar m
 SIMILAR_MAX_PAGES = 3
 SIMILAR_MAX_RESULTS = 30
 SEARCH_MAX_RESULTS = 12
+CACHE_TTL = 600  # seconds — repeat queries are served without touching PakWheels
+CACHE_MAX_ENTRIES = 50
 
-HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/120.0.0.0 Safari/537.36"
-    ),
-    "Accept-Language": "en-US,en;q=0.9",
-}
+# A small pool of current, real browser user-agents. One is picked at random per
+# invocation so we don't present the same static fingerprint on every request.
+USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Edg/130.0.0.0",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 OPR/116.0.0.0",
+]
+
+
+def make_headers():
+    """A full, realistic browser header set — bare-bones headers are the
+    single most common bot fingerprint."""
+    import random
+    return {
+        "User-Agent": random.choice(USER_AGENTS),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate, br",
+        "DNT": "1",
+        "Upgrade-Insecure-Requests": "1",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1",
+    }
+
+
+# In-memory TTL cache (warm serverless instances reuse it). Keyed by query —
+# a repeat "Show similar listings" click never touches PakWheels at all, which
+# is both faster for the user and far less bot-like in volume.
+_CACHE = {}
+
+
+def _cache_get(key):
+    import time as _t
+    entry = _CACHE.get(key)
+    if entry and _t.time() - entry[0] < CACHE_TTL:
+        return entry[1]
+    _CACHE.pop(key, None)
+    return None
+
+
+def _cache_set(key, value):
+    import time as _t
+    if len(_CACHE) >= CACHE_MAX_ENTRIES:
+        # Drop the oldest entry
+        oldest = min(_CACHE, key=lambda k: _CACHE[k][0])
+        _CACHE.pop(oldest, None)
+    _CACHE[key] = (_t.time(), value)
 
 UNAVAILABLE_MSG = (
     "Live listings are temporarily unavailable — PakWheels did not respond. "
@@ -143,14 +188,29 @@ def parse_listing_card(car, brand, model_name):
     }
 
 
-def _fetch_page(brand, model_name, query_bits, page_no):
-    """Fetch one PakWheels results page; return raw card rows (unfiltered)."""
+def _new_session():
+    """A requests session that behaves like a first-time visitor: we land on
+    the homepage first so PakWheels sets its normal cookies, then browse —
+    exactly what a human session looks like instead of a cold deep-link hit."""
     import requests
+    s = requests.Session()
+    s.headers.update(make_headers())
+    try:
+        s.get("https://www.pakwheels.com/", timeout=TIMEOUT)
+    except Exception:
+        pass  # priming is best-effort; the search can still proceed
+    # Subsequent navigations come "from" the site itself, like a real user
+    s.headers.update({"Referer": "https://www.pakwheels.com/", "Sec-Fetch-Site": "same-origin"})
+    return s
+
+
+def _fetch_page(session, brand, model_name, query_bits, page_no):
+    """Fetch one PakWheels results page; return raw card rows (unfiltered)."""
     from bs4 import BeautifulSoup
 
     query = quote_plus(" ".join(query_bits))
     url = f"https://www.pakwheels.com/used-cars/search/-/?q={query}&page={page_no}"
-    response = requests.get(url, headers=HEADERS, timeout=TIMEOUT)
+    response = session.get(url, timeout=TIMEOUT)
     response.raise_for_status()
 
     soup = BeautifulSoup(response.text, "html.parser")
@@ -172,7 +232,8 @@ def fetch_strict(brand, model_name, trim, year, city):
     if city and city != "Other":
         query_bits.append(city)
 
-    cards = _fetch_page(brand, model_name, query_bits, 1)
+    session = _new_session()
+    cards = _fetch_page(session, brand, model_name, query_bits, 1)
     rows, seen = [], set()
     for card in cards:
         row = parse_listing_card(card, brand, model_name)
@@ -200,15 +261,29 @@ def fetch_similar(brand, model_name, trim):
     Mirrors the Streamlit app's fetch_similar_listing_page — year/city are left
     out of the query and applied as ranking signals instead of hard filters,
     so price-close listings are never excluded before ranking.
+
+    Results are cached (CACHE_TTL) so repeat views don't re-hit PakWheels.
     """
+    cache_key = ("similar", brand, model_name, trim or "")
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+
+    import random
+
     query_bits = [brand, model_name]
     if trim and trim != "Unspecified":
         query_bits.append(trim)
 
+    session = _new_session()
     rows, seen = [], set()
     start = time.time()
     for page_no in range(1, SIMILAR_MAX_PAGES + 1):
-        cards = _fetch_page(brand, model_name, query_bits, page_no)
+        if page_no > 1:
+            # Human-ish pacing between pages — hammering page after page with
+            # zero delay is a classic scraper fingerprint.
+            time.sleep(random.uniform(0.4, 0.9))
+        cards = _fetch_page(session, brand, model_name, query_bits, page_no)
         new_rows = 0
         for card in cards:
             row = parse_listing_card(card, brand, model_name)
@@ -228,6 +303,7 @@ def fetch_similar(brand, model_name, trim):
             break
         if time.time() - start > FETCH_BUDGET:
             break  # stay comfortably inside the serverless time limit
+    _cache_set(cache_key, rows)
     return rows
 
 
