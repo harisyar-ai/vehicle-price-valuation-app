@@ -204,13 +204,22 @@ def _new_session():
     return s
 
 
-def _fetch_page(session, brand, model_name, query_bits, page_no):
+def _fetch_page(session, brand, model_name, query_bits, page_no, debug=None):
     """Fetch one PakWheels results page; return raw card rows (unfiltered)."""
     from bs4 import BeautifulSoup
 
     query = quote_plus(" ".join(query_bits))
     url = f"https://www.pakwheels.com/used-cars/search/-/?q={query}&page={page_no}"
     response = session.get(url, timeout=TIMEOUT)
+    if debug is not None:
+        debug.append({
+            "url": url,
+            "status": response.status_code,
+            "final_url": response.url,
+            "bytes": len(response.text),
+            "redirects": len(response.history),
+            "title": BeautifulSoup(response.text, "html.parser").title.string.strip()[:80] if BeautifulSoup(response.text, "html.parser").title and BeautifulSoup(response.text, "html.parser").title.string else "",
+        })
     response.raise_for_status()
 
     soup = BeautifulSoup(response.text, "html.parser")
@@ -255,7 +264,7 @@ def fetch_strict(brand, model_name, trim, year, city):
     return rows
 
 
-def fetch_similar(brand, model_name, trim):
+def fetch_similar(brand, model_name, trim, debug=None):
     """Similar-listings mode: up to SIMILAR_MAX_PAGES pages, brand/model guard only.
 
     Mirrors the Streamlit app's fetch_similar_listing_page — year/city are left
@@ -267,6 +276,8 @@ def fetch_similar(brand, model_name, trim):
     cache_key = ("similar", brand, model_name, trim or "")
     cached = _cache_get(cache_key)
     if cached is not None:
+        if debug is not None:
+            debug.append({"cache": "hit", "rows": len(cached)})
         return cached
 
     import random
@@ -283,7 +294,7 @@ def fetch_similar(brand, model_name, trim):
             # Human-ish pacing between pages — hammering page after page with
             # zero delay is a classic scraper fingerprint.
             time.sleep(random.uniform(0.4, 0.9))
-        cards = _fetch_page(session, brand, model_name, query_bits, page_no)
+        cards = _fetch_page(session, brand, model_name, query_bits, page_no, debug)
         new_rows = 0
         for card in cards:
             row = parse_listing_card(card, brand, model_name)
@@ -370,6 +381,7 @@ class handler(BaseHTTPRequestHandler):
             predicted_price = getf("predicted_price")
             low_price = getf("low_price")
             high_price = getf("high_price")
+            debug_mode = get("debug") == "1"
         except Exception:
             self._send(400, {"error": "Could not read the search parameters."})
             return
@@ -379,8 +391,9 @@ class handler(BaseHTTPRequestHandler):
             return
 
         try:
+            debug = [] if debug_mode else None
             if mode == "similar":
-                rows = fetch_similar(brand, model_name, trim)
+                rows = fetch_similar(brand, model_name, trim, debug)
                 user_year = int(year) if year and year.isdigit() else None
                 rows = rank_similar_listings(
                     rows, generation, city, user_year,
@@ -392,7 +405,10 @@ class handler(BaseHTTPRequestHandler):
                     0 if generation_matches_title(generation, r["Title"]) else 1,
                     0 if city and str(r["City"]).strip().lower() == city.lower() else 1,
                 ))
-            self._send(200, {"listings": rows})
+            payload = {"listings": rows}
+            if debug_mode:
+                payload["_debug"] = debug
+            self._send(200, payload)
         except Exception:
             # Graceful degradation: PakWheels blocked us, timed out, or changed
             # markup — the UI shows a friendly "unavailable" state, never a crash.
