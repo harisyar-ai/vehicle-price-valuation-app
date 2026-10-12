@@ -1,5 +1,10 @@
 import React from 'react'
 
+// Route cover images through our own /api/img proxy so they load even on
+// networks where PakWheels' image CDN is blocked. The brand-tile onError
+// fallback below stays as the last resort.
+const proxied = (url) => (url ? `/api/img?url=${encodeURIComponent(url)}` : url)
+
 const cardCls =
   'overflow-hidden rounded-xl border border-line bg-white transition-colors hover:border-muted'
 
@@ -12,7 +17,7 @@ function ListingCard({ l }) {
   const cover = l.Cover_URL && imgOk ? (
     <a href={l.Listing_URL || '#'} target="_blank" rel="noopener noreferrer" aria-label={l.Title}>
       <img
-        src={l.Cover_URL}
+        src={proxied(l.Cover_URL)}
         alt=""
         loading="lazy"
         onError={() => setImgOk(false)}
